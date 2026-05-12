@@ -9,8 +9,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// setupTestDB creates a connection pool to the test database
-func setupTestDB(t *testing.T) *pgxpool.Pool {
+// SetupTestDB creates a connection pool to the test database
+func SetupTestDB(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 
 	dbURL := os.Getenv("TEST_DATABASE_URL")

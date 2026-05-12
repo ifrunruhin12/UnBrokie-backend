@@ -16,9 +16,10 @@ type AccountRepository interface {
 	GetByUserID(ctx context.Context, userID string) (*domain.Account, error)
 	UpdateStartingBalance(ctx context.Context, userID string, balance int) error
 	UpdateTimezone(ctx context.Context, userID string, tz string) error
-	AdjustBalance(ctx context.Context, userID string, delta int) error
+	AdjustBalance(ctx context.Context, db DBTX, userID string, delta int) error
 	SetDirty(ctx context.Context, userID string, dirty bool) error
 	SetReconciled(ctx context.Context, userID string) error
+	ReconcileBalance(ctx context.Context, userID string, balance int) error
 }
 
 type accountRepository struct {
@@ -80,8 +81,8 @@ func (r *accountRepository) UpdateTimezone(ctx context.Context, userID string, t
 	return err
 }
 
-func (r *accountRepository) AdjustBalance(ctx context.Context, userID string, delta int) error {
-	_, err := r.db.Exec(ctx,
+func (r *accountRepository) AdjustBalance(ctx context.Context, db DBTX, userID string, delta int) error {
+	_, err := db.Exec(ctx,
 		`UPDATE accounts SET current_balance = current_balance + $1 WHERE user_id = $2`,
 		delta, userID,
 	)
@@ -100,6 +101,21 @@ func (r *accountRepository) SetReconciled(ctx context.Context, userID string) er
 	_, err := r.db.Exec(ctx,
 		`UPDATE accounts SET balance_dirty = FALSE, last_reconciled_at = NOW() WHERE user_id = $1`,
 		userID,
+	)
+	return err
+}
+
+// ReconcileBalance atomically sets the balance to an authoritative value and marks it reconciled.
+// This is the correct way to update balance during reconciliation — avoids race conditions
+// from concurrent balance mutations between recompute and update.
+func (r *accountRepository) ReconcileBalance(ctx context.Context, userID string, balance int) error {
+	_, err := r.db.Exec(ctx,
+		`UPDATE accounts 
+		 SET current_balance = $1, 
+		     balance_dirty = FALSE, 
+		     last_reconciled_at = NOW() 
+		 WHERE user_id = $2`,
+		balance, userID,
 	)
 	return err
 }

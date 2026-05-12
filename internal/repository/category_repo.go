@@ -14,10 +14,10 @@ import (
 type CategoryRepository interface {
 	Insert(ctx context.Context, db DBTX, c domain.Category) error
 	Update(ctx context.Context, c domain.Category) error
-	Delete(ctx context.Context, id string) error
+	Delete(ctx context.Context, id, userID string) error
 	ListByUser(ctx context.Context, userID string) ([]domain.Category, error)
-	IsReferencedByTransactions(ctx context.Context, id string) (bool, error)
-	IsReferencedByBigBuys(ctx context.Context, id string) (bool, error)
+	IsReferencedByTransactions(ctx context.Context, id, userID string) (bool, error)
+	IsReferencedByBigBuys(ctx context.Context, id, userID string) (bool, error)
 }
 
 type categoryRepository struct {
@@ -63,10 +63,10 @@ func (r *categoryRepository) Update(ctx context.Context, c domain.Category) erro
 	return nil
 }
 
-func (r *categoryRepository) Delete(ctx context.Context, id string) error {
+func (r *categoryRepository) Delete(ctx context.Context, id, userID string) error {
 	tag, err := r.db.Exec(ctx,
-		`DELETE FROM categories WHERE id = $1`,
-		id,
+		`DELETE FROM categories WHERE id = $1 AND user_id = $2`,
+		id, userID,
 	)
 	if err != nil {
 		return err
@@ -98,20 +98,30 @@ func (r *categoryRepository) ListByUser(ctx context.Context, userID string) ([]d
 	return cats, rows.Err()
 }
 
-func (r *categoryRepository) IsReferencedByTransactions(ctx context.Context, id string) (bool, error) {
+func (r *categoryRepository) IsReferencedByTransactions(ctx context.Context, id, userID string) (bool, error) {
 	var exists bool
 	err := r.db.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM transactions WHERE category_id = $1 AND deleted_at IS NULL)`,
-		id,
+		`SELECT EXISTS(
+			SELECT 1 FROM transactions 
+			WHERE category_id = $1 
+			  AND user_id = $2 
+			  AND deleted_at IS NULL
+		)`,
+		id, userID,
 	).Scan(&exists)
 	return exists, err
 }
 
-func (r *categoryRepository) IsReferencedByBigBuys(ctx context.Context, id string) (bool, error) {
+func (r *categoryRepository) IsReferencedByBigBuys(ctx context.Context, id, userID string) (bool, error) {
 	var exists bool
 	err := r.db.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM big_buys WHERE category_id = $1 AND deleted_at IS NULL)`,
-		id,
+		`SELECT EXISTS(
+			SELECT 1 FROM big_buys 
+			WHERE category_id = $1 
+			  AND user_id = $2 
+			  AND deleted_at IS NULL
+		)`,
+		id, userID,
 	).Scan(&exists)
 	return exists, err
 }

@@ -13,7 +13,7 @@ import (
 )
 
 func TestConsumableRepository_InsertAndGet(t *testing.T) {
-	pool := setupTestDB(t)
+	pool := SetupTestDB(t)
 	defer cleanupTestDB(t, pool)
 	truncateTables(t, pool)
 
