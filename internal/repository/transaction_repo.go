@@ -70,7 +70,9 @@ func (r *transactionRepository) Insert(ctx context.Context, db DBTX, tx domain.T
 		 (id, user_id, type, category_id, amount, is_skipped, is_overridden,
 		  source_id, source_type, note, date, generation_date, updated_at, created_at)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
-		 ON CONFLICT ON CONSTRAINT uniq_tx_source_date DO NOTHING`,
+		 ON CONFLICT (source_id, source_type, generation_date) 
+		 WHERE (source_id IS NOT NULL AND deleted_at IS NULL)
+		 DO NOTHING`,
 		tx.ID, tx.UserID, tx.Type, tx.CategoryID, tx.Amount,
 		tx.IsSkipped, tx.IsOverridden,
 		tx.SourceID, tx.SourceType,
