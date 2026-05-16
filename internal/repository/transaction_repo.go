@@ -29,6 +29,9 @@ type TransactionRepository interface {
 
 	// GetByID retrieves a transaction by ID. Returns domain.ErrNotFound if not found or soft-deleted.
 	GetByID(ctx context.Context, id string) (*domain.Transaction, error)
+	// GetByIDForUpdate retrieves a transaction with a row lock (SELECT FOR UPDATE), preventing concurrent modifications.
+	// Must be called within a transaction. Use this for Override, Skip, and Restore operations to prevent race conditions.
+	GetByIDForUpdate(ctx context.Context, db DBTX, id string) (*domain.Transaction, error)
 	// ListByDateRange returns transactions for a user within [from, to], sorted date DESC, id DESC.
 	// Supports cursor pagination: pass non-zero cursorDate and non-empty cursorID to page after a previous result.
 	// limit <= 0 defaults to 50.
@@ -37,6 +40,9 @@ type TransactionRepository interface {
 	ExistsForSourceAndDate(ctx context.Context, sourceID string, date time.Time) (bool, error)
 	// SumNonSkippedNonOverridden returns the sum of amounts for all active transactions for a user.
 	SumNonSkippedNonOverridden(ctx context.Context, userID string) (int, error)
+	// GetHistory walks the source_id chain starting from txID and returns all related records
+	// in chronological order (original → overrides). Returns domain.ErrNotFound if txID doesn't exist.
+	GetHistory(ctx context.Context, txID string) ([]domain.Transaction, error)
 }
 
 type transactionRepository struct {
@@ -170,6 +176,32 @@ func (r *transactionRepository) GetByID(ctx context.Context, id string) (*domain
 	return &t, nil
 }
 
+func (r *transactionRepository) GetByIDForUpdate(ctx context.Context, db DBTX, id string) (*domain.Transaction, error) {
+	rows, err := db.Query(ctx,
+		`SELECT `+txSelectCols+`
+		 FROM transactions
+		 WHERE id = $1 AND deleted_at IS NULL
+		 FOR UPDATE`,
+		id,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		return nil, domain.ErrNotFound
+	}
+	t, err := scanTxRow(rows)
+	if err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
+
 func (r *transactionRepository) ListByDateRange(
 	ctx context.Context,
 	userID string,
@@ -253,4 +285,68 @@ func (r *transactionRepository) SumNonSkippedNonOverridden(ctx context.Context, 
 		userID,
 	).Scan(&sum)
 	return sum, err
+}
+
+// GetHistory walks the source_id chain starting from txID and returns all related records
+// in chronological order (original → overrides).
+//
+// Algorithm:
+// 1. Load the starting transaction by ID
+// 2. If it has source_type='transaction', walk backwards to find the root
+// 3. Collect the root transaction
+// 4. Find all override transactions that point to the root (source_id = root.ID AND source_type = 'transaction')
+// 5. Sort by created_at ASC to get chronological order
+//
+// Returns domain.ErrNotFound if txID doesn't exist or is soft-deleted.
+func (r *transactionRepository) GetHistory(ctx context.Context, txID string) ([]domain.Transaction, error) {
+	// Load the starting transaction
+	startTx, err := r.GetByID(ctx, txID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Resolve the root transaction by walking backwards
+	rootID := txID
+	if startTx.SourceType != nil && *startTx.SourceType == domain.SourceTypeTransaction && startTx.SourceID != nil {
+		rootID = *startTx.SourceID
+	}
+
+	// Collect all transactions in the chain:
+	// 1. The root transaction
+	// 2. All override transactions that point to the root
+	//
+	// Query: SELECT all transactions WHERE (id = rootID) OR (source_id = rootID AND source_type = 'transaction')
+	// Order by created_at ASC to get chronological order (original first, then overrides in order)
+	rows, err := r.db.Query(ctx,
+		`SELECT `+txSelectCols+`
+		 FROM transactions
+		 WHERE (id = $1 OR (source_id = $1 AND source_type = 'transaction'))
+		   AND deleted_at IS NULL
+		 ORDER BY created_at ASC`,
+		rootID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var history []domain.Transaction
+	for rows.Next() {
+		t, err := scanTxRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		history = append(history, t)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// If no results, the root transaction was soft-deleted or doesn't exist
+	if len(history) == 0 {
+		return nil, domain.ErrNotFound
+	}
+
+	return history, nil
 }

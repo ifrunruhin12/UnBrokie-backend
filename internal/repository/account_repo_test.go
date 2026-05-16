@@ -14,8 +14,8 @@ import (
 
 func TestAccountRepository_InsertAndGet(t *testing.T) {
 	pool := SetupTestDB(t)
-	defer cleanupTestDB(t, pool)
-	truncateTables(t, pool)
+	defer CleanupTestDB(t, pool)
+	TruncateTables(t, pool)
 
 	userRepo := NewUserRepository(pool)
 	accountRepo := NewAccountRepository(pool)
@@ -71,8 +71,8 @@ func TestAccountRepository_InsertAndGet(t *testing.T) {
 
 func TestAccountRepository_ReconcileBalance(t *testing.T) {
 	pool := SetupTestDB(t)
-	defer cleanupTestDB(t, pool)
-	truncateTables(t, pool)
+	defer CleanupTestDB(t, pool)
+	TruncateTables(t, pool)
 
 	userRepo := NewUserRepository(pool)
 	accountRepo := NewAccountRepository(pool)

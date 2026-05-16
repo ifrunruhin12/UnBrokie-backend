@@ -31,6 +31,10 @@ import (
 type TransactionService interface {
 	Create(ctx context.Context, tx domain.Transaction) (*domain.Transaction, error)
 	ListByDateRange(ctx context.Context, userID string, from, to time.Time, limit int, cursorDate time.Time, cursorID string) ([]domain.Transaction, *Cursor, error)
+	Skip(ctx context.Context, txID string, userID string) error
+	Restore(ctx context.Context, txID string, userID string) error
+	Override(ctx context.Context, originalID string, userID string, amount int, note string) (*domain.Transaction, error)
+	GetHistory(ctx context.Context, txID string, userID string) ([]domain.Transaction, error)
 }
 
 // Cursor represents pagination state for transaction listing.
@@ -201,6 +205,270 @@ func (s *transactionService) ListByDateRange(
 	}
 
 	return txs, nextCursor, nil
+}
+
+// Skip marks a transaction as skipped and atomically adjusts the account balance.
+// Skipped transactions are excluded from all balance, projection, and dashboard calculations.
+// Requirements: 5.6, 7.3
+func (s *transactionService) Skip(ctx context.Context, txID string, userID string) error {
+	// Begin database transaction — ALL OR NOTHING
+	dbTx, err := s.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer dbTx.Rollback(ctx)
+
+	// Load the transaction to verify ownership and get the amount
+	// Use FOR UPDATE to prevent concurrent modifications (race condition protection)
+	tx, err := s.transactionRepo.GetByIDForUpdate(ctx, dbTx, txID)
+	if err != nil {
+		return fmt.Errorf("failed to load transaction: %w", err)
+	}
+
+	// Verify ownership
+	if tx.UserID != userID {
+		return fmt.Errorf("%w: transaction does not belong to user", domain.ErrNotFound)
+	}
+
+	// If already skipped, this is a no-op (idempotent)
+	if tx.IsSkipped {
+		return nil
+	}
+
+	// Set is_skipped = true and update updated_at
+	tx.IsSkipped = true
+	tx.UpdatedAt = time.Now().UTC()
+	if err := s.transactionRepo.Update(ctx, dbTx, *tx); err != nil {
+		return fmt.Errorf("failed to update transaction: %w", err)
+	}
+
+	// Atomically adjust balance: current_balance -= tx.amount
+	// (Removing the transaction's contribution from the balance)
+	if err := s.accountRepo.AdjustBalance(ctx, dbTx, userID, -tx.Amount); err != nil {
+		return fmt.Errorf("failed to adjust balance: %w", err)
+	}
+
+	// Append event log entry if enabled
+	if s.enableEventLog {
+		if err := s.appendEvent(ctx, dbTx, userID, "SKIP_TX", txID, tx); err != nil {
+			s.logger.Warn("failed to append event log",
+				slog.String("user_id", userID),
+				slog.String("transaction_id", txID),
+				slog.String("error", err.Error()),
+			)
+		}
+	}
+
+	// Commit the transaction
+	if err := dbTx.Commit(ctx); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
+}
+
+// Restore marks a previously skipped transaction as active and atomically adjusts the account balance.
+// Requirements: 7.4
+func (s *transactionService) Restore(ctx context.Context, txID string, userID string) error {
+	// Begin database transaction — ALL OR NOTHING
+	dbTx, err := s.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer dbTx.Rollback(ctx)
+
+	// Load the transaction to verify ownership and get the amount
+	// Use FOR UPDATE to prevent concurrent modifications (race condition protection)
+	tx, err := s.transactionRepo.GetByIDForUpdate(ctx, dbTx, txID)
+	if err != nil {
+		return fmt.Errorf("failed to load transaction: %w", err)
+	}
+
+	// Verify ownership
+	if tx.UserID != userID {
+		return fmt.Errorf("%w: transaction does not belong to user", domain.ErrNotFound)
+	}
+
+	// If not skipped, this is a no-op (idempotent)
+	if !tx.IsSkipped {
+		return nil
+	}
+
+	// Set is_skipped = false and update updated_at
+	tx.IsSkipped = false
+	tx.UpdatedAt = time.Now().UTC()
+	if err := s.transactionRepo.Update(ctx, dbTx, *tx); err != nil {
+		return fmt.Errorf("failed to update transaction: %w", err)
+	}
+
+	// Atomically adjust balance: current_balance += tx.amount
+	// (Re-adding the transaction's contribution to the balance)
+	if err := s.accountRepo.AdjustBalance(ctx, dbTx, userID, tx.Amount); err != nil {
+		return fmt.Errorf("failed to adjust balance: %w", err)
+	}
+
+	// Append event log entry if enabled
+	if s.enableEventLog {
+		if err := s.appendEvent(ctx, dbTx, userID, "RESTORE_TX", txID, tx); err != nil {
+			s.logger.Warn("failed to append event log",
+				slog.String("user_id", userID),
+				slog.String("transaction_id", txID),
+				slog.String("error", err.Error()),
+			)
+		}
+	}
+
+	// Commit the transaction
+	if err := dbTx.Commit(ctx); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
+}
+
+// Override creates a new override transaction that replaces an original transaction.
+// The original transaction is marked as overridden and excluded from calculations.
+// If the original transaction is itself an override, the new override replaces it
+// and points to the root transaction.
+// Requirements: 5.5, 7.1, 7.5
+func (s *transactionService) Override(ctx context.Context, originalID string, userID string, amount int, note string) (*domain.Transaction, error) {
+	// Validation
+	if amount == 0 {
+		return nil, fmt.Errorf("%w: amount must be non-zero", domain.ErrValidation)
+	}
+
+	// Begin database transaction — ALL OR NOTHING
+	dbTx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer dbTx.Rollback(ctx)
+
+	// Load the original transaction
+	// Use FOR UPDATE to prevent concurrent modifications (race condition protection)
+	originalTx, err := s.transactionRepo.GetByIDForUpdate(ctx, dbTx, originalID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load original transaction: %w", err)
+	}
+
+	// Verify ownership
+	if originalTx.UserID != userID {
+		return nil, fmt.Errorf("%w: transaction does not belong to user", domain.ErrNotFound)
+	}
+
+	// Resolve the root transaction by walking the source_id chain
+	// If the original transaction has source_type='transaction', it's an override itself
+	// and we need to find the root transaction it points to.
+	rootID := originalID
+	if originalTx.SourceType != nil && *originalTx.SourceType == domain.SourceTypeTransaction && originalTx.SourceID != nil {
+		rootID = *originalTx.SourceID
+	}
+
+	// Mark all previous overrides for this root as overridden
+	// This handles the case where we're overriding an override
+	if err := s.transactionRepo.SetOverriddenBySourceID(ctx, dbTx, rootID); err != nil {
+		return nil, fmt.Errorf("failed to mark previous overrides: %w", err)
+	}
+
+	// Mark the root transaction as overridden
+	if err := s.transactionRepo.SetOverridden(ctx, dbTx, rootID, true); err != nil {
+		return nil, fmt.Errorf("failed to mark root transaction as overridden: %w", err)
+	}
+
+	// Create the new override transaction
+	now := time.Now().UTC()
+	overrideTx := domain.Transaction{
+		ID:         uuid.New().String(),
+		UserID:     userID,
+		Type:       domain.TransactionTypeOverride,
+		CategoryID: originalTx.CategoryID,
+		Amount:     amount,
+		IsSkipped:  false,
+		IsOverridden: false,
+		SourceID:   &rootID,
+		SourceType: sourceTypePtr(domain.SourceTypeTransaction),
+		Note:       note,
+		Date:       originalTx.Date,
+		GenerationDate: nil, // Override transactions don't have generation_date
+		UpdatedAt:  now,
+		CreatedAt:  now,
+	}
+
+	// Insert the override transaction
+	rowsAffected, err := s.transactionRepo.Insert(ctx, dbTx, overrideTx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to insert override transaction: %w", err)
+	}
+	if rowsAffected == 0 {
+		return nil, fmt.Errorf("failed to insert override transaction: conflict")
+	}
+
+	// Adjust balance by (-original.amount + newAmount)
+	// This removes the original transaction's contribution and adds the override's contribution
+	balanceDelta := -originalTx.Amount + amount
+	if err := s.accountRepo.AdjustBalance(ctx, dbTx, userID, balanceDelta); err != nil {
+		return nil, fmt.Errorf("failed to adjust balance: %w", err)
+	}
+
+	// Set balance_dirty = true to trigger recompute on next read
+	// This is a safety measure for complex multi-table operations
+	if err := s.accountRepo.SetDirty(ctx, dbTx, userID, true); err != nil {
+		return nil, fmt.Errorf("failed to set balance dirty: %w", err)
+	}
+
+	// Append event log entry if enabled
+	if s.enableEventLog {
+		eventPayload := map[string]interface{}{
+			"override_tx": overrideTx,
+			"original_id": originalID,
+			"root_id":     rootID,
+		}
+		if err := s.appendEvent(ctx, dbTx, userID, "OVERRIDE_TX", overrideTx.ID, eventPayload); err != nil {
+			s.logger.Warn("failed to append event log",
+				slog.String("user_id", userID),
+				slog.String("transaction_id", overrideTx.ID),
+				slog.String("error", err.Error()),
+			)
+		}
+	}
+
+	// Commit the transaction
+	if err := dbTx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return &overrideTx, nil
+}
+
+// GetHistory retrieves the full history of a transaction, including the original
+// and all override transactions in chronological order.
+// Verifies that the transaction belongs to the specified user.
+// Requirements: 5.5, 7.5
+func (s *transactionService) GetHistory(ctx context.Context, txID string, userID string) ([]domain.Transaction, error) {
+	// Fetch the history from the repository
+	history, err := s.transactionRepo.GetHistory(ctx, txID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get transaction history: %w", err)
+	}
+
+	// Verify ownership: check that the first transaction (root) belongs to the user
+	// All transactions in the chain must belong to the same user by design,
+	// so we only need to check the first one.
+	if len(history) == 0 {
+		return nil, domain.ErrNotFound
+	}
+
+	if history[0].UserID != userID {
+		return nil, fmt.Errorf("%w: transaction does not belong to user", domain.ErrNotFound)
+	}
+
+	return history, nil
+}
+
+// sourceTypePtr returns a pointer to the given SourceType.
+// Helper for setting nullable SourceType fields.
+func sourceTypePtr(st domain.SourceType) *domain.SourceType {
+	return &st
 }
 
 // appendEvent writes an event log entry to the events table within the given transaction.

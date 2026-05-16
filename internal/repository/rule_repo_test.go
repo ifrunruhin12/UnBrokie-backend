@@ -14,8 +14,8 @@ import (
 
 func TestRuleRepository_InsertAndList(t *testing.T) {
 	pool := SetupTestDB(t)
-	defer cleanupTestDB(t, pool)
-	truncateTables(t, pool)
+	defer CleanupTestDB(t, pool)
+	TruncateTables(t, pool)
 
 	userRepo := NewUserRepository(pool)
 	categoryRepo := NewCategoryRepository(pool)

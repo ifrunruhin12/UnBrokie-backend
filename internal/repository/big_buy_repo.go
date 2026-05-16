@@ -20,6 +20,11 @@ type BigBuyRepository interface {
 	Update(ctx context.Context, db DBTX, b domain.BigBuy) error
 	// Delete soft-deletes a big buy by setting deleted_at = NOW().
 	Delete(ctx context.Context, db DBTX, id string) error
+	// GetByID retrieves a big buy by ID and user ID, returning ErrNotFound if not found or deleted.
+	GetByID(ctx context.Context, db DBTX, id string, userID string) (*domain.BigBuy, error)
+	// GetByIDForUpdate retrieves a big buy with a row lock (SELECT FOR UPDATE), preventing concurrent modifications.
+	// Must be called within a transaction. Use this for Update and Delete operations to prevent race conditions.
+	GetByIDForUpdate(ctx context.Context, db DBTX, id string, userID string) (*domain.BigBuy, error)
 
 	// ListByMonth returns all non-deleted big buys for a user in the given month, sorted date ASC.
 	ListByMonth(ctx context.Context, userID string, year int, month int) ([]domain.BigBuy, error)
@@ -87,6 +92,51 @@ func (r *bigBuyRepository) Delete(ctx context.Context, db DBTX, id string) error
 		return domain.ErrNotFound
 	}
 	return nil
+}
+
+func (r *bigBuyRepository) GetByID(ctx context.Context, db DBTX, id string, userID string) (*domain.BigBuy, error) {
+	row := db.QueryRow(ctx,
+		`SELECT `+bigBuySelectCols+`
+		 FROM big_buys
+		 WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL`,
+		id, userID,
+	)
+
+	var b domain.BigBuy
+	err := row.Scan(
+		&b.ID, &b.UserID, &b.Title, &b.Amount, &b.CategoryID,
+		&b.Note, &b.Date, &b.DeletedAt, &b.CreatedAt,
+	)
+	if err != nil {
+		if err.Error() == "no rows in result set" {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+	return &b, nil
+}
+
+func (r *bigBuyRepository) GetByIDForUpdate(ctx context.Context, db DBTX, id string, userID string) (*domain.BigBuy, error) {
+	row := db.QueryRow(ctx,
+		`SELECT `+bigBuySelectCols+`
+		 FROM big_buys
+		 WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
+		 FOR UPDATE`,
+		id, userID,
+	)
+
+	var b domain.BigBuy
+	err := row.Scan(
+		&b.ID, &b.UserID, &b.Title, &b.Amount, &b.CategoryID,
+		&b.Note, &b.Date, &b.DeletedAt, &b.CreatedAt,
+	)
+	if err != nil {
+		if err.Error() == "no rows in result set" {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+	return &b, nil
 }
 
 func (r *bigBuyRepository) ListByMonth(ctx context.Context, userID string, year int, month int) ([]domain.BigBuy, error) {

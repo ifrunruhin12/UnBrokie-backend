@@ -13,8 +13,8 @@ type Config struct {
 	Port                      string
 	LogLevel                  string
 	EnableEventLog            bool
-	BalanceStalenessThreshold time.Duration
-	RateLimitRPM              int
+	BalanceStalenessThreshold time.Duration // Used in balance_service.isStale() - wired in Phase 4, Task 29
+	RateLimitRPM              int           // TODO: Wire into rate limiting middleware (Phase 4, Task 24)
 	JWTSecret                 string
 	JWTExpiry                 time.Duration
 

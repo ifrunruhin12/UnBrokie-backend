@@ -14,8 +14,8 @@ import (
 
 func TestUserRepository_InsertAndGet(t *testing.T) {
 	pool := SetupTestDB(t)
-	defer cleanupTestDB(t, pool)
-	truncateTables(t, pool)
+	defer CleanupTestDB(t, pool)
+	TruncateTables(t, pool)
 
 	repo := NewUserRepository(pool)
 	ctx := context.Background()

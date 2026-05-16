@@ -17,7 +17,7 @@ type AccountRepository interface {
 	UpdateStartingBalance(ctx context.Context, userID string, balance int) error
 	UpdateTimezone(ctx context.Context, userID string, tz string) error
 	AdjustBalance(ctx context.Context, db DBTX, userID string, delta int) error
-	SetDirty(ctx context.Context, userID string, dirty bool) error
+	SetDirty(ctx context.Context, db DBTX, userID string, dirty bool) error
 	SetReconciled(ctx context.Context, userID string) error
 	ReconcileBalance(ctx context.Context, userID string, balance int) error
 }
@@ -89,8 +89,8 @@ func (r *accountRepository) AdjustBalance(ctx context.Context, db DBTX, userID s
 	return err
 }
 
-func (r *accountRepository) SetDirty(ctx context.Context, userID string, dirty bool) error {
-	_, err := r.db.Exec(ctx,
+func (r *accountRepository) SetDirty(ctx context.Context, db DBTX, userID string, dirty bool) error {
+	_, err := db.Exec(ctx,
 		`UPDATE accounts SET balance_dirty = $1 WHERE user_id = $2`,
 		dirty, userID,
 	)
