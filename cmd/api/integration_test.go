@@ -85,10 +85,11 @@ func buildTestServer(t *testing.T, dbURL, jwtSecret string) *httptest.Server {
 
 	authSvc := service.NewAuthService(pool, userRepo, accountRepo, categoryRepo, cfg)
 	balanceSvc := service.NewBalanceService(accountRepo, transactionRepo, bigBuyRepo, 5*time.Minute, log)
+	transactionSvc := service.NewTransactionService(pool, transactionRepo, accountRepo, false, log)
 
 	authH := handler.NewAuthHandler(authSvc)
 	accountH := handler.NewAccountHandler(balanceSvc, accountRepo)
-	transactionH := handler.NewTransactionHandler()
+	transactionH := handler.NewTransactionHandler(transactionSvc)
 	categoryH := handler.NewCategoryHandler()
 	bigBuyH := handler.NewBigBuyHandler()
 
