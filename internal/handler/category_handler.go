@@ -5,15 +5,20 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/ifrunruhin12/money-manager/internal/service"
 	"github.com/ifrunruhin12/money-manager/internal/utils"
 )
 
 // CategoryHandler handles category endpoints.
-type CategoryHandler struct{}
+type CategoryHandler struct {
+	service service.CategoryService
+}
 
 // NewCategoryHandler creates a new CategoryHandler.
-func NewCategoryHandler() *CategoryHandler {
-	return &CategoryHandler{}
+func NewCategoryHandler(service service.CategoryService) *CategoryHandler {
+	return &CategoryHandler{
+		service: service,
+	}
 }
 
 // Create handles POST /categories.
@@ -22,8 +27,22 @@ func (h *CategoryHandler) Create(c *gin.Context) {
 	if !ok {
 		return
 	}
-	_ = userID
-	utils.WriteOK(c, http.StatusCreated, gin.H{})
+
+	var req struct {
+		Name string `json:"name"`
+	}
+	if !utils.BindJSON(c, &req) {
+		return
+	}
+
+	cat, err := h.service.Create(c.Request.Context(), userID, req.Name)
+	if err != nil {
+		status, msg := utils.MapError(err)
+		utils.WriteError(c, status, msg)
+		return
+	}
+
+	utils.WriteOK(c, http.StatusCreated, cat)
 }
 
 // List handles GET /categories.
@@ -32,8 +51,15 @@ func (h *CategoryHandler) List(c *gin.Context) {
 	if !ok {
 		return
 	}
-	_ = userID
-	utils.WriteOK(c, http.StatusOK, gin.H{"categories": []any{}})
+
+	categories, err := h.service.List(c.Request.Context(), userID)
+	if err != nil {
+		status, msg := utils.MapError(err)
+		utils.WriteError(c, status, msg)
+		return
+	}
+
+	utils.WriteOK(c, http.StatusOK, gin.H{"categories": categories})
 }
 
 // Update handles PATCH /categories/:id.
@@ -42,8 +68,28 @@ func (h *CategoryHandler) Update(c *gin.Context) {
 	if !ok {
 		return
 	}
-	_ = userID
-	utils.WriteOK(c, http.StatusOK, gin.H{})
+
+	id := c.Param("id")
+	if id == "" {
+		utils.WriteError(c, http.StatusBadRequest, "category id is required")
+		return
+	}
+
+	var req struct {
+		Name string `json:"name"`
+	}
+	if !utils.BindJSON(c, &req) {
+		return
+	}
+
+	cat, err := h.service.Update(c.Request.Context(), id, userID, req.Name)
+	if err != nil {
+		status, msg := utils.MapError(err)
+		utils.WriteError(c, status, msg)
+		return
+	}
+
+	utils.WriteOK(c, http.StatusOK, cat)
 }
 
 // Delete handles DELETE /categories/:id.
@@ -52,6 +98,19 @@ func (h *CategoryHandler) Delete(c *gin.Context) {
 	if !ok {
 		return
 	}
-	_ = userID
-	utils.WriteOK(c, http.StatusOK, gin.H{})
+
+	id := c.Param("id")
+	if id == "" {
+		utils.WriteError(c, http.StatusBadRequest, "category id is required")
+		return
+	}
+
+	err := h.service.Delete(c.Request.Context(), id, userID)
+	if err != nil {
+		status, msg := utils.MapError(err)
+		utils.WriteError(c, status, msg)
+		return
+	}
+
+	utils.WriteOK(c, http.StatusOK, gin.H{"deleted": true})
 }
