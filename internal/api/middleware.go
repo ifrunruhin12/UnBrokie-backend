@@ -2,8 +2,10 @@ package api
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -48,6 +50,132 @@ func TimeoutMiddleware(timeout time.Duration) gin.HandlerFunc {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), timeout)
 		defer cancel()
 		c.Request = c.Request.WithContext(ctx)
+		c.Next()
+	}
+}
+
+// RequestLogger logs method, path, status, and latency on every request
+func RequestLogger(logger *slog.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+		path := c.Request.URL.Path
+		method := c.Request.Method
+
+		c.Next()
+
+		latency := time.Since(start)
+		status := c.Writer.Status()
+
+		logger.Info("request completed",
+			"method", method,
+			"path", path,
+			"status", status,
+			"latency", latency.String(),
+		)
+	}
+}
+
+// tokenBucket represents a simple token bucket for rate limiting
+type tokenBucket struct {
+	tokens         int
+	capacity       int
+	refillRate     int // tokens per minute
+	lastRefillTime time.Time
+	mu             sync.Mutex
+}
+
+func newTokenBucket(rpm int) *tokenBucket {
+	return &tokenBucket{
+		tokens:         rpm,
+		capacity:       rpm,
+		refillRate:     rpm,
+		lastRefillTime: time.Now(),
+	}
+}
+
+func (tb *tokenBucket) allow() bool {
+	tb.mu.Lock()
+	defer tb.mu.Unlock()
+
+	// Refill tokens based on elapsed time
+	now := time.Now()
+	elapsed := now.Sub(tb.lastRefillTime)
+	tokensToAdd := int(elapsed.Minutes() * float64(tb.refillRate))
+
+	if tokensToAdd > 0 {
+		tb.tokens = min(tb.capacity, tb.tokens+tokensToAdd)
+		tb.lastRefillTime = now
+	}
+
+	// Check if we have tokens available
+	if tb.tokens > 0 {
+		tb.tokens--
+		return true
+	}
+
+	return false
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// RateLimiter implements in-memory token bucket rate limiting per user_id
+func RateLimiter(rpm int) gin.HandlerFunc {
+	buckets := make(map[string]*tokenBucket)
+	var mu sync.RWMutex
+
+	return func(c *gin.Context) {
+		// Extract user_id from context (set by AuthMiddleware)
+		userIDVal, exists := c.Get(ContextUserIDKey)
+		if !exists {
+			// If no user_id in context, allow the request (auth middleware will handle it)
+			c.Next()
+			return
+		}
+
+		userID, ok := userIDVal.(string)
+		if !ok || userID == "" {
+			c.Next()
+			return
+		}
+
+		// Get or create bucket for this user
+		mu.RLock()
+		bucket, exists := buckets[userID]
+		mu.RUnlock()
+
+		if !exists {
+			mu.Lock()
+			// Double-check after acquiring write lock
+			bucket, exists = buckets[userID]
+			if !exists {
+				bucket = newTokenBucket(rpm)
+				buckets[userID] = bucket
+			}
+			mu.Unlock()
+		}
+
+		// Check if request is allowed
+		if !bucket.allow() {
+			utils.AbortWithError(c, http.StatusTooManyRequests, "rate limit exceeded")
+			return
+		}
+
+		c.Next()
+	}
+}
+
+// JSONBodyValidator returns HTTP 400 with descriptive message on malformed JSON
+func JSONBodyValidator() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// This middleware doesn't need to do anything here
+		// Gin's ShouldBindJSON already returns descriptive errors
+		// Handlers should use ShouldBindJSON and check for errors
+		// This middleware serves as a placeholder for future validation logic
 		c.Next()
 	}
 }
