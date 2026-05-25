@@ -57,7 +57,7 @@ http://localhost:8080/swagger
 
 #### Account
 - `GET /balance` - Get current balance
-- `PATCH /account/balance` - Update starting balance
+- `PATCH /account/balance` - Set current balance (adjusts starting balance to match)
 - `PATCH /account/timezone` - Update timezone
 - `POST /account/reconcile` - Force balance reconciliation
 

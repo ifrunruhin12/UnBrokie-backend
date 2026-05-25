@@ -202,7 +202,8 @@ paths:
         Returns the current account balance. The balance is computed as:
         `starting_balance + sum(all non-skipped, non-overridden transactions) + sum(all big buys)`
         
-        If the cached balance is stale or dirty, it will be recomputed from the database.
+        Returns the stored current_balance. Recomputation runs only when balance_dirty is true
+        (use POST /account/reconcile to force a full ledger recompute).
       responses:
         '200':
           description: Balance retrieved successfully
@@ -227,10 +228,12 @@ paths:
     patch:
       tags:
         - Account
-      summary: Update starting balance
+      summary: Set current account balance
       description: |
-        Updates the account's starting balance and triggers a reconciliation.
-        This is typically used when setting up the account for the first time.
+        Sets the balance returned by GET /balance to the requested value.
+        The server adjusts starting_balance so that
+        `starting_balance + sum(transactions) + sum(big_buys)` equals the requested balance.
+        Use this when onboarding or correcting the displayed balance.
       requestBody:
         required: true
         content:

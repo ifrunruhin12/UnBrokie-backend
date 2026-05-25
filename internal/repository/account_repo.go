@@ -66,11 +66,17 @@ func (r *accountRepository) GetByUserID(ctx context.Context, userID string) (*do
 }
 
 func (r *accountRepository) UpdateStartingBalance(ctx context.Context, userID string, balance int) error {
-	_, err := r.db.Exec(ctx,
+	tag, err := r.db.Exec(ctx,
 		`UPDATE accounts SET starting_balance = $1, balance_dirty = TRUE WHERE user_id = $2`,
 		balance, userID,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
 }
 
 func (r *accountRepository) UpdateTimezone(ctx context.Context, userID string, tz string) error {

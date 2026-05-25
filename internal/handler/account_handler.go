@@ -56,14 +56,7 @@ func (h *AccountHandler) UpdateStartingBalance(c *gin.Context) {
 		return
 	}
 
-	if err := h.accountRepo.UpdateStartingBalance(c.Request.Context(), userID, req.Balance); err != nil {
-		status, msg := utils.MapError(err)
-		utils.WriteError(c, status, msg)
-		return
-	}
-
-	// Trigger reconcile after updating starting balance
-	balance, err := h.balanceService.GetBalance(c.Request.Context(), userID)
+	balance, err := h.balanceService.SetBalance(c.Request.Context(), userID, req.Balance)
 	if err != nil {
 		status, msg := utils.MapError(err)
 		utils.WriteError(c, status, msg)
@@ -119,8 +112,7 @@ func (h *AccountHandler) Reconcile(c *gin.Context) {
 
 	cachedBalance := account.CurrentBalance
 
-	// Force reconciliation by calling GetBalance (which will recompute if needed)
-	trueBalance, err := h.balanceService.GetBalance(c.Request.Context(), userID)
+	trueBalance, err := h.balanceService.ForceReconcile(c.Request.Context(), userID)
 	if err != nil {
 		status, msg := utils.MapError(err)
 		utils.WriteError(c, status, msg)
