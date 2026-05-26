@@ -9,19 +9,16 @@ import (
 	"github.com/ifrunruhin12/money-manager/internal/utils"
 )
 
-// CategoryHandler handles category endpoints.
 type CategoryHandler struct {
 	service service.CategoryService
 }
 
-// NewCategoryHandler creates a new CategoryHandler.
 func NewCategoryHandler(service service.CategoryService) *CategoryHandler {
 	return &CategoryHandler{
 		service: service,
 	}
 }
 
-// Create handles POST /categories.
 func (h *CategoryHandler) Create(c *gin.Context) {
 	userID, ok := utils.GetUserID(c)
 	if !ok {
@@ -45,7 +42,6 @@ func (h *CategoryHandler) Create(c *gin.Context) {
 	utils.WriteOK(c, http.StatusCreated, cat)
 }
 
-// List handles GET /categories.
 func (h *CategoryHandler) List(c *gin.Context) {
 	userID, ok := utils.GetUserID(c)
 	if !ok {
@@ -62,7 +58,6 @@ func (h *CategoryHandler) List(c *gin.Context) {
 	utils.WriteOK(c, http.StatusOK, gin.H{"categories": categories})
 }
 
-// Update handles PATCH /categories/:id.
 func (h *CategoryHandler) Update(c *gin.Context) {
 	userID, ok := utils.GetUserID(c)
 	if !ok {
@@ -92,7 +87,6 @@ func (h *CategoryHandler) Update(c *gin.Context) {
 	utils.WriteOK(c, http.StatusOK, cat)
 }
 
-// Delete handles DELETE /categories/:id.
 func (h *CategoryHandler) Delete(c *gin.Context) {
 	userID, ok := utils.GetUserID(c)
 	if !ok {

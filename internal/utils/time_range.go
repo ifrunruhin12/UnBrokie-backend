@@ -9,7 +9,6 @@ type TimeRange struct {
 	End   time.Time
 }
 
-// DayRange returns the full day window for a given time.
 func DayRange(t time.Time, loc *time.Location) TimeRange {
 	return TimeRange{
 		Start: StartOfDay(t, loc),
@@ -17,7 +16,6 @@ func DayRange(t time.Time, loc *time.Location) TimeRange {
 	}
 }
 
-// NextDayRange returns the full next calendar day window.
 func NextDayRange(t time.Time, loc *time.Location) TimeRange {
 	start := NextDay(t, loc)
 	return TimeRange{
@@ -26,7 +24,6 @@ func NextDayRange(t time.Time, loc *time.Location) TimeRange {
 	}
 }
 
-// MonthRange returns the full month window.
 func MonthRange(t time.Time, loc *time.Location) TimeRange {
 	return TimeRange{
 		Start: StartOfMonth(t, loc),
@@ -34,7 +31,6 @@ func MonthRange(t time.Time, loc *time.Location) TimeRange {
 	}
 }
 
-// NextMonthRange returns the full next month window.
 func NextMonthRange(t time.Time, loc *time.Location) TimeRange {
 	start := StartOfNextMonth(t, loc)
 	return TimeRange{

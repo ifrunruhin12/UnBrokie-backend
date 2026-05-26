@@ -9,9 +9,6 @@ import (
 	"github.com/ifrunruhin12/money-manager/internal/handler"
 )
 
-// NewRouter builds and returns the Gin engine with all routes registered.
-// Public routes (auth) are registered without middleware.
-// All other routes are protected by AuthMiddleware.
 func NewRouter(
 	jwtSecret string,
 	rateLimitRPM int,
@@ -33,7 +30,6 @@ func NewRouter(
 			"service": "money-manager",
 		}
 
-		// Optional DB health check
 		if db != nil {
 			if err := db.Ping(c.Request.Context()); err != nil {
 				response["status"] = "degraded"

@@ -10,25 +10,13 @@ import (
 	"github.com/ifrunruhin12/money-manager/internal/domain"
 )
 
-// BigBuyRepository defines persistence operations for big buy entries.
-// Mutating methods accept a DBTX so callers can pass either a *pgxpool.Pool
-// or a pgx.Tx (inside a caller-managed transaction).
 type BigBuyRepository interface {
-	// Insert persists a new big buy entry.
 	Insert(ctx context.Context, db DBTX, b domain.BigBuy) error
-	// Update persists changes to an existing big buy entry.
 	Update(ctx context.Context, db DBTX, b domain.BigBuy) error
-	// Delete soft-deletes a big buy by setting deleted_at = NOW().
 	Delete(ctx context.Context, db DBTX, id string) error
-	// GetByID retrieves a big buy by ID and user ID, returning ErrNotFound if not found or deleted.
 	GetByID(ctx context.Context, db DBTX, id string, userID string) (*domain.BigBuy, error)
-	// GetByIDForUpdate retrieves a big buy with a row lock (SELECT FOR UPDATE), preventing concurrent modifications.
-	// Must be called within a transaction. Use this for Update and Delete operations to prevent race conditions.
 	GetByIDForUpdate(ctx context.Context, db DBTX, id string, userID string) (*domain.BigBuy, error)
-
-	// ListByMonth returns all non-deleted big buys for a user in the given month, sorted date ASC.
 	ListByMonth(ctx context.Context, userID string, year int, month int) ([]domain.BigBuy, error)
-	// SumByDateRange returns the sum of amounts for all non-deleted big buys in [from, to].
 	SumByDateRange(ctx context.Context, userID string, from, to time.Time) (int, error)
 }
 
@@ -36,7 +24,6 @@ type bigBuyRepository struct {
 	db *pgxpool.Pool
 }
 
-// NewBigBuyRepository creates a new BigBuyRepository backed by the given pool.
 func NewBigBuyRepository(db *pgxpool.Pool) BigBuyRepository {
 	return &bigBuyRepository{db: db}
 }

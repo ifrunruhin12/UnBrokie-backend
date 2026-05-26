@@ -54,7 +54,6 @@ func TimeoutMiddleware(timeout time.Duration) gin.HandlerFunc {
 	}
 }
 
-// RequestLogger logs method, path, status, and latency on every request
 func RequestLogger(logger *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
@@ -75,7 +74,6 @@ func RequestLogger(logger *slog.Logger) gin.HandlerFunc {
 	}
 }
 
-// tokenBucket represents a simple token bucket for rate limiting
 type tokenBucket struct {
 	tokens         int
 	capacity       int
@@ -97,7 +95,6 @@ func (tb *tokenBucket) allow() bool {
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 
-	// Refill tokens based on elapsed time
 	now := time.Now()
 	elapsed := now.Sub(tb.lastRefillTime)
 	tokensToAdd := int(elapsed.Minutes() * float64(tb.refillRate))
@@ -107,7 +104,6 @@ func (tb *tokenBucket) allow() bool {
 		tb.lastRefillTime = now
 	}
 
-	// Check if we have tokens available
 	if tb.tokens > 0 {
 		tb.tokens--
 		return true
@@ -116,14 +112,6 @@ func (tb *tokenBucket) allow() bool {
 	return false
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-// RateLimiter implements in-memory token bucket rate limiting per user_id
 func RateLimiter(rpm int) gin.HandlerFunc {
 	buckets := make(map[string]*tokenBucket)
 	var mu sync.RWMutex

@@ -11,13 +11,11 @@ import (
 	"github.com/ifrunruhin12/money-manager/internal/utils"
 )
 
-// AccountHandler handles account and balance endpoints.
 type AccountHandler struct {
 	balanceService service.BalanceService
 	accountRepo    repository.AccountRepository
 }
 
-// NewAccountHandler creates a new AccountHandler.
 func NewAccountHandler(balanceService service.BalanceService, accountRepo repository.AccountRepository) *AccountHandler {
 	return &AccountHandler{
 		balanceService: balanceService,
@@ -25,7 +23,6 @@ func NewAccountHandler(balanceService service.BalanceService, accountRepo reposi
 	}
 }
 
-// GetBalance handles GET /balance.
 func (h *AccountHandler) GetBalance(c *gin.Context) {
 	userID, ok := utils.GetUserID(c)
 	if !ok {
@@ -42,7 +39,6 @@ func (h *AccountHandler) GetBalance(c *gin.Context) {
 	utils.WriteOK(c, http.StatusOK, gin.H{"balance": balance})
 }
 
-// UpdateStartingBalance handles PATCH /account/balance.
 func (h *AccountHandler) UpdateStartingBalance(c *gin.Context) {
 	userID, ok := utils.GetUserID(c)
 	if !ok {
@@ -66,7 +62,6 @@ func (h *AccountHandler) UpdateStartingBalance(c *gin.Context) {
 	utils.WriteOK(c, http.StatusOK, gin.H{"balance": balance})
 }
 
-// UpdateTimezone handles PATCH /account/timezone.
 func (h *AccountHandler) UpdateTimezone(c *gin.Context) {
 	userID, ok := utils.GetUserID(c)
 	if !ok {
@@ -80,7 +75,6 @@ func (h *AccountHandler) UpdateTimezone(c *gin.Context) {
 		return
 	}
 
-	// Validate IANA timezone string
 	if _, err := time.LoadLocation(req.Timezone); err != nil {
 		utils.WriteError(c, http.StatusBadRequest, "invalid timezone: "+err.Error())
 		return
@@ -95,14 +89,12 @@ func (h *AccountHandler) UpdateTimezone(c *gin.Context) {
 	utils.WriteOK(c, http.StatusOK, gin.H{"timezone": req.Timezone})
 }
 
-// Reconcile handles POST /account/reconcile.
 func (h *AccountHandler) Reconcile(c *gin.Context) {
 	userID, ok := utils.GetUserID(c)
 	if !ok {
 		return
 	}
 
-	// Get account to check current cached balance
 	account, err := h.accountRepo.GetByUserID(c.Request.Context(), userID)
 	if err != nil {
 		status, msg := utils.MapError(err)

@@ -9,12 +9,10 @@ import (
 	"github.com/ifrunruhin12/money-manager/internal/utils"
 )
 
-// AuthHandler handles registration and login endpoints.
 type AuthHandler struct {
 	auth service.AuthService
 }
 
-// NewAuthHandler creates a new AuthHandler.
 func NewAuthHandler(auth service.AuthService) *AuthHandler {
 	return &AuthHandler{auth: auth}
 }
@@ -24,7 +22,6 @@ type authRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
-// Register handles POST /auth/register.
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req authRequest
 	if !utils.BindJSON(c, &req) {
@@ -41,7 +38,6 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	utils.WriteOK(c, http.StatusCreated, gin.H{"token": token})
 }
 
-// Login handles POST /auth/login.
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req authRequest
 	if !utils.BindJSON(c, &req) {

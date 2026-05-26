@@ -15,7 +15,6 @@ const (
 	pgErrCodeUniqueViolation = "23505"
 )
 
-// UserRepository defines persistence operations for users.
 type UserRepository interface {
 	Insert(ctx context.Context, db DBTX, user domain.User) error
 	GetByEmail(ctx context.Context, email string) (*domain.User, error)
@@ -26,13 +25,10 @@ type userRepository struct {
 	db *pgxpool.Pool
 }
 
-// NewUserRepository creates a new UserRepository backed by the given pool.
 func NewUserRepository(db *pgxpool.Pool) UserRepository {
 	return &userRepository{db: db}
 }
 
-// Insert persists a new user using the provided DBTX (pool or tx).
-// Returns domain.ErrConflict if the email already exists.
 func (r *userRepository) Insert(ctx context.Context, db DBTX, user domain.User) error {
 	_, err := db.Exec(ctx,
 		`INSERT INTO users (id, email, password_hash, created_at, updated_at)
@@ -49,7 +45,6 @@ func (r *userRepository) Insert(ctx context.Context, db DBTX, user domain.User) 
 	return nil
 }
 
-// GetByEmail retrieves a user by email. Returns domain.ErrNotFound if no row exists.
 func (r *userRepository) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
 	var u domain.User
 	err := r.db.QueryRow(ctx,
@@ -66,7 +61,6 @@ func (r *userRepository) GetByEmail(ctx context.Context, email string) (*domain.
 	return &u, nil
 }
 
-// GetByID retrieves a user by ID. Returns domain.ErrNotFound if no row exists.
 func (r *userRepository) GetByID(ctx context.Context, id string) (*domain.User, error) {
 	var u domain.User
 	err := r.db.QueryRow(ctx,
