@@ -1,4 +1,4 @@
-# Money Manager for Noobs
+# UnBrokie-backend
 
 A minimal personal finance backend focused on balance tracking, financial projections, and learning backend engineering through building real systems.
 
