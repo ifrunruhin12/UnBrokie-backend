@@ -16,20 +16,15 @@ import (
 )
 
 func main() {
-	// Step 1: Load configuration from environment variables.
-	// Exits with a descriptive error if required vars (DATABASE_URL, JWT_SECRET) are missing.
 	cfg, err := config.Load()
 	if err != nil {
-		// Logger not yet available; fall back to slog default for this one fatal message.
 		slog.Error("failed to load configuration", "err", err)
 		os.Exit(1)
 	}
 
-	// Step 2: Initialize structured logger.
 	log := logger.New(cfg.LogLevel)
 	log.Info("configuration loaded", "port", cfg.Port, "log_level", cfg.LogLevel)
 
-	// Step 3: Connect to PostgreSQL.
 	ctx := context.Background()
 	pool, err := db.Connect(ctx, cfg)
 	if err != nil {
@@ -39,37 +34,29 @@ func main() {
 	defer pool.Close()
 	log.Info("database connection established")
 
-	// Step 4: Run pending migrations.
-	// The migrations directory path is relative to the working directory (project root).
 	if err := db.RunMigrations(cfg.DatabaseURL, "migrations", log); err != nil {
 		log.Error("failed to run migrations", "err", err)
 		os.Exit(1)
 	}
 
-	// Step 5: Build dependency graph — db → repos → services → handlers → router
-
-	// Repositories
 	userRepo := repository.NewUserRepository(pool)
 	accountRepo := repository.NewAccountRepository(pool)
 	categoryRepo := repository.NewCategoryRepository(pool)
 	transactionRepo := repository.NewTransactionRepository(pool)
 	bigBuyRepo := repository.NewBigBuyRepository(pool)
 
-	// Services
 	authService := service.NewAuthService(pool, userRepo, accountRepo, categoryRepo, cfg)
 	balanceService := service.NewBalanceService(accountRepo, transactionRepo, bigBuyRepo, cfg.BalanceStalenessThreshold, log)
 	categoryService := service.NewCategoryService(categoryRepo, pool)
 	transactionService := service.NewTransactionService(pool, transactionRepo, accountRepo, cfg.EnableEventLog, log)
 	bigBuyService := service.NewBigBuyService(pool, bigBuyRepo, accountRepo, cfg.EnableEventLog, log)
 
-	// Handlers
 	authHandler := handler.NewAuthHandler(authService)
 	accountHandler := handler.NewAccountHandler(balanceService, accountRepo)
 	transactionHandler := handler.NewTransactionHandler(transactionService)
 	categoryHandler := handler.NewCategoryHandler(categoryService)
 	bigBuyHandler := handler.NewBigBuyHandler(bigBuyService)
 
-	// Router
 	router := api.NewRouter(
 		cfg.JWTSecret,
 		cfg.RateLimitRPM,
@@ -82,7 +69,6 @@ func main() {
 		bigBuyHandler,
 	)
 
-	// Step 6: Start HTTP server
 	addr := fmt.Sprintf(":%s", cfg.Port)
 	log.Info("starting HTTP server", "addr", addr)
 	if err := router.Run(addr); err != nil {

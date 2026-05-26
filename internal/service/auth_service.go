@@ -24,7 +24,6 @@ var defaultCategories = []string{
 
 var emailRegex = regexp.MustCompile(`^[^@]+@[^@]+\.[^@]+$`)
 
-// AuthService handles user registration and login.
 type AuthService interface {
 	Register(ctx context.Context, email, password string) (string, error)
 	Login(ctx context.Context, email, password string) (string, error)
@@ -38,7 +37,6 @@ type authService struct {
 	cfg        *config.Config
 }
 
-// NewAuthService creates a new AuthService.
 func NewAuthService(
 	db *pgxpool.Pool,
 	users repository.UserRepository,
@@ -55,7 +53,6 @@ func NewAuthService(
 	}
 }
 
-// Register creates a new user, default account, and default categories, then returns a signed JWT.
 func (s *authService) Register(ctx context.Context, email, password string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -145,7 +142,6 @@ func (s *authService) Register(ctx context.Context, email, password string) (str
 	return token, nil
 }
 
-// Login verifies credentials and returns a signed JWT.
 func (s *authService) Login(ctx context.Context, email, password string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()

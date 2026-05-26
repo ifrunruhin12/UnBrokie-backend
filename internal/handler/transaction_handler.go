@@ -12,19 +12,16 @@ import (
 	"github.com/ifrunruhin12/money-manager/internal/utils"
 )
 
-// TransactionHandler handles transaction endpoints.
 type TransactionHandler struct {
 	transactionService service.TransactionService
 }
 
-// NewTransactionHandler creates a new TransactionHandler.
 func NewTransactionHandler(transactionService service.TransactionService) *TransactionHandler {
 	return &TransactionHandler{
 		transactionService: transactionService,
 	}
 }
 
-// Create handles POST /transactions.
 func (h *TransactionHandler) Create(c *gin.Context) {
 	userID, ok := utils.GetUserID(c)
 	if !ok {
@@ -62,21 +59,18 @@ func (h *TransactionHandler) Create(c *gin.Context) {
 	utils.WriteOK(c, http.StatusCreated, gin.H{"transaction": created})
 }
 
-// List handles GET /transactions.
 func (h *TransactionHandler) List(c *gin.Context) {
 	userID, ok := utils.GetUserID(c)
 	if !ok {
 		return
 	}
 
-	// Parse query parameters
 	fromStr := c.Query("from")
 	toStr := c.Query("to")
 	limitStr := c.DefaultQuery("limit", "50")
 	cursorDateStr := c.Query("cursor_date")
 	cursorID := c.Query("cursor_id")
 
-	// Parse from date (required)
 	if fromStr == "" {
 		utils.WriteError(c, http.StatusBadRequest, "from query parameter is required")
 		return
@@ -87,7 +81,6 @@ func (h *TransactionHandler) List(c *gin.Context) {
 		return
 	}
 
-	// Parse to date (required)
 	if toStr == "" {
 		utils.WriteError(c, http.StatusBadRequest, "to query parameter is required")
 		return
@@ -98,14 +91,12 @@ func (h *TransactionHandler) List(c *gin.Context) {
 		return
 	}
 
-	// Parse limit
 	limit, err := strconv.Atoi(limitStr)
 	if err != nil || limit <= 0 {
 		utils.WriteError(c, http.StatusBadRequest, "invalid limit (must be positive integer)")
 		return
 	}
 
-	// Parse cursor (optional)
 	var cursorDate time.Time
 	if cursorDateStr != "" {
 		cursorDate, err = time.Parse(time.RFC3339, cursorDateStr)
@@ -115,7 +106,6 @@ func (h *TransactionHandler) List(c *gin.Context) {
 		}
 	}
 
-	// Call service
 	transactions, nextCursor, err := h.transactionService.ListByDateRange(
 		c.Request.Context(),
 		userID,
@@ -144,7 +134,6 @@ func (h *TransactionHandler) List(c *gin.Context) {
 	utils.WriteOK(c, http.StatusOK, response)
 }
 
-// Override handles PATCH /transactions/:id/override.
 func (h *TransactionHandler) Override(c *gin.Context) {
 	userID, ok := utils.GetUserID(c)
 	if !ok {
@@ -177,7 +166,6 @@ func (h *TransactionHandler) Override(c *gin.Context) {
 	utils.WriteOK(c, http.StatusOK, gin.H{"transaction": overrideTx})
 }
 
-// Skip handles PATCH /transactions/:id/skip.
 func (h *TransactionHandler) Skip(c *gin.Context) {
 	userID, ok := utils.GetUserID(c)
 	if !ok {
@@ -199,7 +187,6 @@ func (h *TransactionHandler) Skip(c *gin.Context) {
 	utils.WriteOK(c, http.StatusOK, gin.H{"skipped": true})
 }
 
-// Restore handles PATCH /transactions/:id/restore.
 func (h *TransactionHandler) Restore(c *gin.Context) {
 	userID, ok := utils.GetUserID(c)
 	if !ok {
@@ -221,7 +208,6 @@ func (h *TransactionHandler) Restore(c *gin.Context) {
 	utils.WriteOK(c, http.StatusOK, gin.H{"restored": true})
 }
 
-// GetHistory handles GET /transactions/:id/history.
 func (h *TransactionHandler) GetHistory(c *gin.Context) {
 	userID, ok := utils.GetUserID(c)
 	if !ok {

@@ -9,9 +9,6 @@ import (
 	"github.com/ifrunruhin12/money-manager/internal/handler"
 )
 
-// NewRouter builds and returns the Gin engine with all routes registered.
-// Public routes (auth) are registered without middleware.
-// All other routes are protected by AuthMiddleware.
 func NewRouter(
 	jwtSecret string,
 	rateLimitRPM int,
@@ -25,17 +22,14 @@ func NewRouter(
 ) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Recovery())
-	r.Use(RequestLogger(logger)) // Apply RequestLogger globally
+	r.Use(RequestLogger(logger))
 
-	// Health check endpoint — no auth, no prefix
-	// Returns 200 if server is up; checks DB connectivity if pool is provided
 	r.GET("/health", func(c *gin.Context) {
 		response := gin.H{
 			"status":  "ok",
 			"service": "money-manager",
 		}
 
-		// Optional DB health check
 		if db != nil {
 			if err := db.Ping(c.Request.Context()); err != nil {
 				response["status"] = "degraded"
@@ -49,13 +43,11 @@ func NewRouter(
 		c.JSON(200, response)
 	})
 
-	// Swagger UI endpoint — no auth
 	r.GET("/swagger", handler.ServeSwaggerUI())
 	r.StaticFile("/swagger.yaml", "./docs/swagger.yaml")
 
 	v1 := r.Group("/api/v1")
 
-	// Public routes — no auth middleware
 	auth := v1.Group("/auth")
 	{
 		auth.POST("/register", authH.Register)

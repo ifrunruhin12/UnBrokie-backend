@@ -7,29 +7,26 @@ import (
 	"time"
 )
 
-// Config holds all application configuration loaded from environment variables.
 type Config struct {
 	DatabaseURL               string
 	Port                      string
 	LogLevel                  string
 	EnableEventLog            bool
-	BalanceStalenessThreshold time.Duration // Used in balance_service.isStale() - wired in Phase 4, Task 29
-	RateLimitRPM              int           // TODO: Wire into rate limiting middleware (Phase 4, Task 24)
+	BalanceStalenessThreshold time.Duration
+	RateLimitRPM              int
 	JWTSecret                 string
 	JWTExpiry                 time.Duration
 
 	// DB connection pool tuning
-	DBMaxConns                int32
-	DBMinConns                int32
-	DBMaxConnLifetime         time.Duration
-	DBMaxConnIdleTime         time.Duration
-	DBHealthCheckPeriod       time.Duration
-	DBMaxConnLifetimeJitter   time.Duration
-	DBPingTimeout             time.Duration
+	DBMaxConns              int32
+	DBMinConns              int32
+	DBMaxConnLifetime       time.Duration
+	DBMaxConnIdleTime       time.Duration
+	DBHealthCheckPeriod     time.Duration
+	DBMaxConnLifetimeJitter time.Duration
+	DBPingTimeout           time.Duration
 }
 
-// Load reads configuration from environment variables and returns a Config.
-// Returns an error if required variables are missing or values are invalid.
 func Load() (*Config, error) {
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {

@@ -6,7 +6,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ServeSwaggerUI serves the Swagger UI HTML page
 func ServeSwaggerUI() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		html := `<!DOCTYPE html>
