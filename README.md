@@ -4,6 +4,8 @@ A minimal personal finance backend focused on balance tracking, financial projec
 
 Built with Go and PostgreSQL.
 
+This is the backend for the UnBrokie app and this is the UnBrokie app repository [UnBrokie](https://github.com/ifrunruhin12/UnBrokie)
+
 ---
 
 ## Why this exists
@@ -75,8 +77,8 @@ This project became a playground for learning:
 * Authentication system implemented
 * Financial transaction system implemented
 * Big buy system implemented
-* API handlers/routes in progress
-* Flutter frontend planned next
+* API handlers/routes for MVP is done
+* Flutter frontend for version 1.0.0 MVP is done
 
 ---
 
